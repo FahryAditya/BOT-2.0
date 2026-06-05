@@ -6,11 +6,34 @@ const { handleMessage } = require('./messageHandler');
 let isReady = false;
 let authenticatedAt = null;
 
+const fs = require('fs');
+
+// Fungsi untuk mendeteksi path Chrome di Linux/Railway
+function getChromePath() {
+    if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
+    
+    const commonPaths = [
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/app/.apt/usr/bin/google-chrome-stable',
+        '/nix/store/*/bin/google-chrome-stable'
+    ];
+
+    for (const path of commonPaths) {
+        if (fs.existsSync(path)) return path;
+    }
+    return null;
+}
+
+const chromePath = getChromePath();
+
 console.log('🚀 Memulai Anime WhatsApp Bot...');
 console.log('⚙️  Konfigurasi:');
 console.log('   - Bot Name:', config.botName);
 console.log('   - Prefix:', config.prefix);
-console.log('   - Chrome Path:', process.env.CHROME_PATH || '/usr/bin/google-chrome-stable');
+console.log('   - Detected Chrome Path:', chromePath || 'Not found (using bundled)');
 console.log('');
 
 // Inisialisasi client
@@ -21,7 +44,7 @@ const client = new Client({
     }),
     puppeteer: {
         headless: true,
-        executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome-stable',
+        executablePath: chromePath || undefined,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',

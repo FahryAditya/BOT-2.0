@@ -1,9 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs", "google-chrome", "cacert"]
+nixPkgs = ["nodejs", "google-chrome", "glib", "nss", "atk", "nspr", "dbus", "at-spi2-atk", "cups", "libdrm", "mesa", "libxkbcommon", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "xorg.libxcb", "pango", "cairo"]
 
 [phases.install]
 cmds = ["npm install"]
 
 [variables]
-CHROME_PATH = "/usr/bin/google-chrome-stable"
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
