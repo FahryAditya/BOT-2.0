@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Session data
+.wwebjs_auth/
+.wwebjs_cache/
+session/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
