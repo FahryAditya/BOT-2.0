@@ -10,6 +10,7 @@ console.log('🚀 Memulai Anime WhatsApp Bot...');
 console.log('⚙️  Konfigurasi:');
 console.log('   - Bot Name:', config.botName);
 console.log('   - Prefix:', config.prefix);
+console.log('   - Chrome Path:', process.env.CHROME_PATH || '/usr/bin/google-chrome-stable');
 console.log('');
 
 // Inisialisasi client
