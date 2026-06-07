@@ -1,10 +1,23 @@
+require('dotenv').config();
+console.log('[DEBUG] CHANNEL_ID loaded from .env:', process.env.CHANNEL_ID);
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const config = require('./config');
 const { handleMessage } = require('./messageHandler');
+const { handleWelcome } = require('./commands/welcomeCommand');
+const { setupChannelScheduler } = require('./utils/channelScheduler');
+const readline = require('readline');
 
 let isReady = false;
 let authenticatedAt = null;
+let pairingCodeRequested = false;
+
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+const question = (query) => new Promise((resolve) => rl.question(query, resolve));
 
 const fs = require('fs');
 
@@ -45,46 +58,96 @@ const client = new Client({
     puppeteer: {
         headless: true,
         executablePath: chromePath || undefined,
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
-            '--no-zygote',
             '--disable-gpu',
-            '--single-process'
+            '--disable-extensions'
         ]
     }
 });
 
 // Event: QR Code generation
-client.on('qr', (qr) => {
-    console.log('\n');
-    console.log('╔════════════════════════════════════════╗');
-    console.log('║     📱 SCAN QR CODE INI SEKARANG!     ║');
-    console.log('╚════════════════════════════════════════╝');
-    console.log('');
-    
-    // Generate QR code di terminal
-    qrcode.generate(qr, { small: true });
-    
-    console.log('');
-    console.log('📋 CARA SCAN:');
-    console.log('   1. Buka WhatsApp di HP kamu');
-    console.log('   2. Tap Menu (3 titik) atau Settings');
-    console.log('   3. Pilih "Linked Devices"');
-    console.log('   4. Tap "Link a Device"');
-    console.log('   5. Scan QR code di atas');
-    console.log('');
-    console.log('⏰ QR Code akan expired dalam 60 detik!');
-    console.log('   Jika expired, bot akan generate QR baru.');
-    console.log('');
+client.on('qr', async (qr) => {
+    // Jika tidak ada session dan belum request pairing code, tawarkan pilihan
+    if (!fs.existsSync('./session/session-anime-bot') && !pairingCodeRequested) {
+        console.log('\n');
+        console.log('╔════════════════════════════════════════╗');
+        console.log('║        📱 PILIH METODE LOGIN           ║');
+        console.log('╠════════════════════════════════════════╣');
+        console.log('║ 1. QR Code (Scan langsung)             ║');
+        console.log('║ 2. Pairing Code (Masukan Kode)         ║');
+        console.log('╚════════════════════════════════════════╝');
+        console.log('');
+        
+        const choice = await question('Pilihan kamu (1/2): ');
+        
+        if (choice === '2') {
+            console.log('\n💡 Menggunakan metode Pairing Code...');
+            let phoneNumber = await question('Masukkan nomor WhatsApp (contoh: 628123456789): ');
+            phoneNumber = phoneNumber.replace(/[^0-9]/g, '');
+            
+            if (phoneNumber) {
+                try {
+                    const code = await client.requestPairingCode(phoneNumber);
+                    console.log('\n');
+                    console.log('╔════════════════════════════════════════╗');
+                    console.log(`║    PAIRING CODE KAMU: ${code}    ║`);
+                    console.log('╚════════════════════════════════════════╝');
+                    console.log('');
+                    console.log('📋 CARA PAKAI:');
+                    console.log('   1. Buka WhatsApp di HP kamu');
+                    console.log('   2. Tap Menu (3 titik) atau Settings');
+                    console.log('   3. Pilih "Linked Devices"');
+                    console.log('   4. Tap "Link with phone number instead"');
+                    console.log('   5. Masukkan kode di atas');
+                    console.log('');
+                    pairingCodeRequested = true;
+                    return;
+                } catch (err) {
+                    console.error('❌ Gagal mendapatkan pairing code:', err.message);
+                    console.log('🔄 Fallback ke QR Code...');
+                }
+            } else {
+                console.log('⚠️ Nomor tidak valid. Menggunakan QR Code...');
+            }
+        }
+    }
+
+    // Default: Tampilkan QR Code
+    if (!pairingCodeRequested) {
+        console.log('\n');
+        console.log('╔════════════════════════════════════════╗');
+        console.log('║     📱 SCAN QR CODE INI SEKARANG!     ║');
+        console.log('╚════════════════════════════════════════╝');
+        console.log('');
+        
+        qrcode.generate(qr, { small: true });
+        
+        console.log('');
+        console.log('📋 CARA SCAN:');
+        console.log('   1. Buka WhatsApp di HP kamu');
+        console.log('   2. Tap Menu (3 titik) atau Settings');
+        console.log('   3. Pilih "Linked Devices"');
+        console.log('   4. Tap "Link a Device"');
+        console.log('   5. Scan QR code di atas');
+        console.log('');
+        console.log('⏰ QR Code akan expired dalam 60 detik!');
+        console.log('   Jika expired, bot akan generate QR baru.');
+        console.log('');
+    }
 });
 
 // Event: Authentication
 client.on('authenticated', () => {
     authenticatedAt = Date.now();
+    if (rl) rl.close();
     console.log('');
     console.log('╔════════════════════════════════════════╗');
     console.log('║      🔐 AUTENTIKASI BERHASIL! ✅       ║');
@@ -117,6 +180,10 @@ client.on('ready', () => {
     console.log('💡 Bot siap menerima command!');
     console.log('   Test dengan kirim pesan: !ping');
     console.log('');
+    
+    // Setup channel scheduler
+    setupChannelScheduler();
+
     console.log('📋 Logs:');
     console.log('─────────────────────────────────────────');
 });
@@ -200,46 +267,7 @@ async function processIncomingMessage(msg) {
 client.on('message_create', processIncomingMessage);
 
 // Event: Group join
-client.on('group_join', async (notification) => {
-    try {
-        console.log('👋 Ada member baru di grup!');
-        
-        const chat = await notification.getChat();
-        const contact = await notification.getContact();
-        
-        // Format welcome message
-        const welcomeMsg = config.welcomeMessage(contact.number);
-        
-        try {
-            // Ambil foto profile
-            const profilePicUrl = await contact.getProfilePicUrl();
-            
-            if (profilePicUrl) {
-                const media = await MessageMedia.fromUrl(profilePicUrl);
-                await chat.sendMessage(media, {
-                    caption: welcomeMsg,
-                    mentions: [contact]
-                });
-            } else {
-                // Jika tidak ada foto profile, kirim teks saja
-                await chat.sendMessage(welcomeMsg, {
-                    mentions: [contact]
-                });
-            }
-        } catch (picError) {
-            console.error('⚠️ Gagal mengambil foto profil:', picError.message);
-            // Fallback ke pesan teks saja
-            await chat.sendMessage(welcomeMsg, {
-                mentions: [contact]
-            });
-        }
-        
-        console.log(`✅ Welcome message terkirim untuk ${contact.pushname || contact.number}`);
-        
-    } catch (error) {
-        console.error('❌ Error sending welcome message:', error.message);
-    }
-});
+client.on('group_join', handleWelcome);
 
 // Error handling
 process.on('unhandledRejection', (error) => {
@@ -312,3 +340,5 @@ setInterval(() => {
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+module.exports = { client };

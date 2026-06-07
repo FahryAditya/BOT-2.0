@@ -112,6 +112,46 @@ class ApiService {
         }
     }
 
+    // Dynamic Quiz Data
+    async getRandomAnimeFromYear(year) {
+        try {
+            await this._throttle();
+            // Ambil anime populer dari tahun tertentu
+            const response = await axios.get(`${config.api.jikan}/anime`, {
+                params: { 
+                    start_date: `${year}-01-01`, 
+                    order_by: 'popularity', 
+                    sort: 'asc',
+                    limit: 25,
+                    status: 'complete'
+                },
+                timeout: 10000
+            });
+            
+            const animeList = response.data.data;
+            if (!animeList || animeList.length === 0) return null;
+            
+            // Pilih satu secara acak dari top 25
+            return animeList[Math.floor(Math.random() * animeList.length)];
+        } catch (error) {
+            console.error('Error getting random anime from year:', error.message);
+            return null;
+        }
+    }
+
+    async getAnimeThemes(mal_id) {
+        try {
+            await this._throttle();
+            const response = await axios.get(`${config.api.jikan}/anime/${mal_id}/themes`, {
+                timeout: 10000
+            });
+            return response.data.data;
+        } catch (error) {
+            console.error('Error getting anime themes:', error.message);
+            return null;
+        }
+    }
+
     // Waifu APIs
     async getRandomWaifu() {
         try {
@@ -174,6 +214,30 @@ class ApiService {
         } catch (error) {
             console.error('Error getting quote:', error.message);
             return null;
+        }
+    }
+
+    // AI Chat
+    async askGemini(prompt) {
+        try {
+            console.log('DEBUG: GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
+            if (!process.env.GEMINI_API_KEY) {
+                console.error('GEMINI_API_KEY not set');
+                return '❌ AI Service tidak tersedia (API Key belum diatur).';
+            }
+            
+            const response = await axios.post(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+                {
+                    contents: [{ parts: [{ text: prompt }] }]
+                },
+                { timeout: 15000 }
+            );
+            
+            return response.data.candidates[0].content.parts[0].text;
+        } catch (error) {
+            console.error('Error asking Gemini:', error.message);
+            return '❌ Gagal mendapatkan jawaban dari AI.';
         }
     }
 }

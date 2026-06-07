@@ -126,9 +126,9 @@ async function handleTopManga(msg) {
 }
 
 module.exports = {
-    handleManga,
-    handleAnimeChar,
-    handleSeasonNow,
-    handleTopAnime,
-    handleTopManga
+    manga: handleManga,
+    animeChar: handleAnimeChar,
+    seasonNow: handleSeasonNow,
+    topAnime: handleTopAnime,
+    topManga: handleTopManga
 };

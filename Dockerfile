@@ -1,7 +1,6 @@
-# Gunakan Node.js resmi yang lengkap (bukan slim)
 FROM node:18
 
-# Install dependencies untuk Puppeteer
+# Install Chromium (bukan Google Chrome)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     fonts-liberation \
@@ -16,8 +15,6 @@ RUN apt-get update && apt-get install -y \
     libfontconfig1 \
     libgbm1 \
     libgcc1 \
-    libgconf-2-4 \
-    libgdk-pixbuf2.0-0 \
     libglib2.0-0 \
     libgtk-3-0 \
     libnspr4 \
@@ -41,24 +38,18 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     wget \
     xdg-utils \
-    google-chrome-stable \
+    chromium \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy all files
 COPY . .
 
-# Set environment variable untuk Puppeteer
-ENV CHROME_PATH=/usr/bin/google-chrome-stable
+# Puppeteer / Chrome path
+ENV CHROME_PATH=/usr/bin/chromium
 
-# Jalankan bot
 CMD ["npm", "start"]

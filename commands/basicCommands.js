@@ -1,4 +1,5 @@
 const config = require('../config');
+const { tagAllMembers } = require('../utils/memberManager');
 
 async function handlePing(msg) {
     try {
@@ -18,6 +19,21 @@ async function handlePing(msg) {
     }
 }
 
+async function handleTagAll(msg) {
+    try {
+        const chat = await msg.getChat();
+        
+        if (!chat.isGroup) {
+            return msg.reply('❌ Command ini hanya bisa digunakan di dalam grup!');
+        }
+        
+        await tagAllMembers(chat);
+    } catch (error) {
+        console.error('❌ Error in handleTagAll:', error);
+        await msg.reply(`❌ Gagal tag semua member: ${error.message}`);
+    }
+}
+
 async function handleMenu(msg) {
     try {
         console.log('📋 handleMenu called');
@@ -29,6 +45,7 @@ async function handleMenu(msg) {
 
 *📋 FITUR DASAR*
 ├ !ping - Cek bot aktif
+├ !tagall - Mention semua member 📢
 └ !menu - Menu ini
 
 *🎌 FITUR ANIME*
@@ -43,26 +60,34 @@ async function handleMenu(msg) {
 ├ !searchgenre <genre> - Cari by genre
 └ !randomgenre - Genre random
 
-*😂 FITUR ABSURD*
-├ !animememe - Meme anime
-├ !animefact - Fakta absurd
-├ !animeweirdchar - Karakter absurd
-├ !guessanime - Tebak anime 🎮
-├ !animeemoji - Emoji anime
-├ !animevs - Battle absurd
-├ !animeghost - Cerita horor
-├ !animerandomquote - Quote absurd
-├ !animefood - Makanan absurd
-├ !animepet - Karakter jadi hewan
-└ !skipquiz - Skip quiz aktif
+*🎮 FITUR GAMES (18 GAMES!)* 🎌
+├ !guesstheanime - Tebak anime
+├ !guessthecharacter - Tebak karakter
+├ !animevs - Battle karakter
+├ !mangaquiz - Quiz manga
+├ !openingquiz - Tebak opening
+├ !animerate - Rating anime
+├ !spainwaifu - Gacha waifu
+├ !animetrivia - Trivia anime
+├ !waifutournament - Tournament waifu
+├ !dailymission - Misi harian
+├ !destiny - Pick your destiny
+├ !roleplay - Chat karakter
+├ !shiritori - Anime shiritori
+├ !emojiriddles - Tebak emoji
+├ !scramble - Tebak nama acak
+├ !guessscene - Tebak adegan
+├ !hangman - Anime hangman
+└ !waifucompat - Cek kecocokan
 
-*💕 FITUR WAIFU*
-├ !cariwaifu <nama> - Cari waifu
-├ !randomwaifu - Waifu random
-└ !waifuquiz - Quiz waifu 🎮
+*✨ FITUR SPESIAL*
+├ !profile - Cek profil
+├ !adventure - RPG Adventure
+└ !setprofile - Atur profil
 
 *🎭 FITUR TAMBAHAN*
-└ !otakudesu - Rekomendasi anime
+├ !otakudesu - Rekomendasi anime
+└ !ai <pertanyaan> - Chat dengan AI 🤖
 
 ╔══════════════════════╗
 ║  🎮 *CARA MAIN QUIZ* 🎮  ║
@@ -92,6 +117,7 @@ _Quiz system dengan auto-detection jawaban!_
 }
 
 module.exports = {
-    handlePing,
-    handleMenu
+    ping: handlePing,
+    menu: handleMenu,
+    tagAll: handleTagAll
 };

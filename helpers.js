@@ -40,9 +40,21 @@ function formatCharacterInfo(character) {
            `📝 About:\n${character.about || 'No information available'}`;
 }
 
-// Random selector
-function getRandomItem(array) {
-    return array[Math.floor(Math.random() * array.length)];
+// Enhanced random selector to avoid immediate repetition
+const lastUsedItems = new Map();
+
+function getRandomItem(array, key = 'default') {
+    if (array.length <= 1) return array[0];
+    
+    let item;
+    let attempts = 0;
+    do {
+        item = array[Math.floor(Math.random() * array.length)];
+        attempts++;
+    } while (item === lastUsedItems.get(key) && attempts < 5);
+    
+    lastUsedItems.set(key, item);
+    return item;
 }
 
 // Sleep function
@@ -50,11 +62,52 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Verify apakah user adalah admin
+ */
+const isAdmin = (message) => {
+    const senderId = message.author || message.from;
+    const senderName = message._data?.notifyName || message._data?.pushname || '';
+    
+    // Log semua pesan untuk memastikan apa yang sedang terjadi
+    console.log(`[DEBUG PERMISSIVE] Admin Check:`);
+    console.log(` - Sender ID: ${senderId}`);
+    console.log(` - Sender Name: "${senderName}"`);
+
+    // LANGSUNG IZINKAN JIKA ID ADALAH 67629091946608@lid (ID Mimin)
+    if (senderId === '67629091946608@lid') {
+        console.log(`[DEBUG PERMISSIVE] ID Match: true (Mimin bypass)`);
+        return true;
+    }
+    
+    // Fallback jika ID lain
+    const adminId = process.env.ADMIN_USER_ID || '6281549027145@c.us';
+    const idMatch = senderId === adminId;
+    console.log(`[DEBUG PERMISSIVE] ID Match: ${idMatch}`);
+
+    return idMatch; 
+};
+
+/**
+ * Verify secret command code
+ */
+const verifySecretCode = (providedCode, secretType) => {
+    if (secretType === 'char') {
+        return providedCode === process.env.ADMIN_SECRET_CHAR;
+    }
+    if (secretType === 'anime') {
+        return providedCode === process.env.ADMIN_SECRET_ANIME;
+    }
+    return false;
+};
+
 module.exports = {
     downloadImage,
     formatAnimeInfo,
     formatMangaInfo,
     formatCharacterInfo,
     getRandomItem,
-    sleep
+    sleep,
+    isAdmin,
+    verifySecretCode
 };

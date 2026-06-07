@@ -1,4 +1,5 @@
 const apiService = require('../apiService');
+const quizManager = require('../quizManager');
 const { downloadImage, getRandomItem } = require('../helpers');
 const { 
     absurdFacts, 
@@ -118,15 +119,28 @@ async function handleAnimePet(msg) {
     );
 }
 
+async function handleSkipQuiz(msg) {
+    const chatId = msg.from;
+    const session = quizManager.getSession(chatId);
+    
+    if (session) {
+        quizManager.deleteSession(chatId);
+        await msg.reply(`⏭️ Quiz dihentikan! Jawabannya adalah: *${session.answer}*`);
+    } else {
+        await msg.reply('❌ Tidak ada quiz yang sedang aktif.');
+    }
+}
+
 module.exports = {
-    handleAnimeMeme,
-    handleAnimeFact,
-    handleAnimeWeirdChar,
-    handleGuessAnime,
-    handleAnimeEmoji,
-    handleAnimeVs,
-    handleAnimeGhost,
-    handleAnimeRandomQuote,
-    handleAnimeFood,
-    handleAnimePet
+    animeMeme: handleAnimeMeme,
+    animeFact: handleAnimeFact,
+    animeWeirdChar: handleAnimeWeirdChar,
+    guessAnime: handleGuessAnime,
+    animeEmoji: handleAnimeEmoji,
+    animeVs: handleAnimeVs,
+    animeGhost: handleAnimeGhost,
+    animeRandomQuote: handleAnimeRandomQuote,
+    animeFood: handleAnimeFood,
+    animePet: handleAnimePet,
+    skipQuiz: handleSkipQuiz
 };

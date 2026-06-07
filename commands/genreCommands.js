@@ -99,7 +99,7 @@ async function handleRandomGenre(msg) {
 }
 
 module.exports = {
-    handleAnimeGenre,
-    handleSearchGenre,
-    handleRandomGenre
+    animeGenre: handleAnimeGenre,
+    searchGenre: handleSearchGenre,
+    randomGenre: handleRandomGenre
 };
