@@ -47,16 +47,10 @@ async function handleAnimeWeirdChar(msg) {
 
 async function handleGuessAnime(msg) {
     const question = getRandomItem(guessAnimeQuestions);
+    const qText = `🎮 *TEBAK ANIME!*\n\n${question.clue}\n\n💡 *Hints:* ${question.hints.join(', ')}\n\nBalas pesan ini dengan jawaban kamu!`;
     
-    await msg.reply(
-        `🎮 *TEBAK ANIME!*\n\n` +
-        `${question.clue}\n\n` +
-        `💡 *Hints:* ${question.hints.join(', ')}\n\n` +
-        `Balas pesan ini dengan jawaban kamu!`
-    );
-    
-    // Note: Untuk fitur validasi jawaban, perlu implementasi session management
-    // yang lebih kompleks. Ini adalah versi sederhana.
+    quizManager.createSession(msg.from, 'tebakanime', qText, question.answer, question.hints);
+    await msg.reply(qText);
 }
 
 async function handleAnimeEmoji(msg) {
@@ -131,6 +125,27 @@ async function handleSkipQuiz(msg) {
     }
 }
 
+async function handleNeoFact(msg) {
+    // Generate random RAM usage between 1.0 and 31.9 GiB
+    const usedRam = (Math.random() * (31.9 - 1.0) + 1.0).toFixed(1);
+    
+    const neofetch = `
+\`\`\`
+Anthropic@arch
+------------
+OS: Arch Linux
+Kernel: Linux 7.0
+Uptime: 2 days
+Packages: 1200
+Shell: bash
+CPU: Intel Core i9 13900K
+RAM: ${usedRam} GiB / 32 GiB
+\`\`\`
+    `.trim();
+    
+    await msg.reply(neofetch);
+}
+
 module.exports = {
     animeMeme: handleAnimeMeme,
     animeFact: handleAnimeFact,
@@ -142,5 +157,6 @@ module.exports = {
     animeRandomQuote: handleAnimeRandomQuote,
     animeFood: handleAnimeFood,
     animePet: handleAnimePet,
-    skipQuiz: handleSkipQuiz
+    skipQuiz: handleSkipQuiz,
+    neoFact: handleNeoFact
 };

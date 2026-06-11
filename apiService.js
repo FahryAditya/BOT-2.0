@@ -5,6 +5,25 @@ class ApiService {
     constructor() {
         this.lastCallTime = 0;
         this.minDelay = 1500; // 1.5 detik delay antar request (Jikan limit)
+        this.cache = new Map();
+        this.cacheTTL = 30 * 60 * 1000; // 30 menit cache
+    }
+
+    _getCache(key) {
+        const cached = this.cache.get(key);
+        if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+            return cached.data;
+        }
+        return null;
+    }
+
+    _setCache(key, data) {
+        this.cache.set(key, { data, timestamp: Date.now() });
+        // Cleanup cache if too large
+        if (this.cache.size > 100) {
+            const keys = Array.from(this.cache.keys());
+            this.cache.delete(keys[0]);
+        }
     }
 
     async _throttle() {
@@ -19,13 +38,19 @@ class ApiService {
 
     // Jikan API (MyAnimeList)
     async searchAnime(query) {
+        const cacheKey = `anime_${query.toLowerCase()}`;
+        const cached = this._getCache(cacheKey);
+        if (cached) return cached;
+
         try {
             await this._throttle();
             const response = await axios.get(`${config.api.jikan}/anime`, {
                 params: { q: query, limit: 1 },
                 timeout: 10000
             });
-            return response.data.data[0];
+            const data = response.data.data[0];
+            if (data) this._setCache(cacheKey, data);
+            return data;
         } catch (error) {
             console.error('Error searching anime:', error.message);
             return null;
@@ -33,13 +58,19 @@ class ApiService {
     }
 
     async searchManga(query) {
+        const cacheKey = `manga_${query.toLowerCase()}`;
+        const cached = this._getCache(cacheKey);
+        if (cached) return cached;
+
         try {
             await this._throttle();
             const response = await axios.get(`${config.api.jikan}/manga`, {
                 params: { q: query, limit: 1 },
                 timeout: 10000
             });
-            return response.data.data[0];
+            const data = response.data.data[0];
+            if (data) this._setCache(cacheKey, data);
+            return data;
         } catch (error) {
             console.error('Error searching manga:', error.message);
             return null;

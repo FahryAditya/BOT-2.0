@@ -3,19 +3,23 @@ const { tagAllMembers } = require('../utils/memberManager');
 
 async function handlePing(msg) {
     try {
-        console.log('🏓 handlePing called');
-        const start = Date.now();
+        // Calculate latency based on message timestamp (when user sent it)
+        // message.timestamp is in seconds, Date.now() is in milliseconds
+        const msgTime = msg.timestamp * 1000;
+        const latency = Date.now() - msgTime;
         
-        const sentMsg = await msg.reply('🏓 Pong!');
-        console.log('✅ Pong message sent');
-        
-        const latency = Date.now() - start;
-        await msg.reply(`⚡ Latency: ${latency}ms`);
-        console.log(`✅ Latency message sent: ${latency}ms`);
-        
+        let status = '🟢 Sangat Cepat';
+        if (latency > 500) status = '🟡 Normal';
+        if (latency > 1500) status = '🔴 Lambat';
+
+        await msg.reply(
+            `🏓 *PONG!*\n\n` +
+            `⚡ *Latensi:* ${latency}ms\n` +
+            `📊 *Status:* ${status}\n` +
+            `🤖 *Bot:* Online & Siap!`
+        );
     } catch (error) {
         console.error('❌ Error in handlePing:', error);
-        throw error;
     }
 }
 
@@ -34,18 +38,22 @@ async function handleTagAll(msg) {
     }
 }
 
-async function handleMenu(msg) {
+async function handleMenu(msg, args) {
     try {
-        console.log('📋 handleMenu called');
-        
-        const menu = `
-╔══════════════════════╗
-║  🎌 *ANIME BOT MENU* 🎌  ║
-╚══════════════════════╝
+        const page = args[0] || '1';
+        let menu = '';
+
+        if (page === '1') {
+            menu = `
+╔═════════════════════=═══╗
+║  🎌 *Anthropic MENU (1)* 🎌 ║
+╚═════════════════════=═══╝
 
 *📋 FITUR DASAR*
 ├ !ping - Cek bot aktif
-├ !tagall - Mention semua member 📢
+├ !tagall - Mention semua 📢
+├ !sticker [nama] - Buat stiker 🖼️
+├ !gif [teks] - Video ke GIF 🎬
 └ !menu - Menu ini
 
 *🎌 FITUR ANIME*
@@ -55,24 +63,39 @@ async function handleMenu(msg) {
 ├ !topanime - Top 5 anime
 └ !topmanga - Top 5 manga
 
-*🎭 FITUR GENRE (BARU!)* ✨
-├ !animegenre - Lihat semua genre
-├ !searchgenre <genre> - Cari by genre
+*🎭 FITUR GENRE*
+├ !animegenre - Semua genre
+├ !searchgenre <genre> - Cari
 └ !randomgenre - Genre random
 
-*🎮 FITUR GAMES (18 GAMES!)* 🎌
+*🎲 GAMES MUDAH*
+├ !tebakangka - Tebak angka
+├ !tebakgambar - Kuis emoji
+├ !suwit [pilihan] - G/B/K
+├ !dadu - Lempar dadu
+├ !flipcoin - Lempar koin
+├ !hitung - Kuis matematika
+└ !katabijak - Motivasi
+
+[ 🔘 *LAINNYA* ] ➡ Ketik *!menu 2*
+            `.trim();
+        } else if (page === '2') {
+            menu = `
+╔═══════════════════════╗
+║  🎌 *Anthropic MENU (2)* 🎌 ║
+╚═══════════════════════╝
+
+*🎮 FITUR GAMES (18+)*
 ├ !guesstheanime - Tebak anime
-├ !guessthecharacter - Tebak karakter
+├ !guessthecharacter - Karakter
 ├ !animevs - Battle karakter
 ├ !mangaquiz - Quiz manga
 ├ !openingquiz - Tebak opening
 ├ !animerate - Rating anime
 ├ !spainwaifu - Gacha waifu
 ├ !animetrivia - Trivia anime
-├ !waifutournament - Tournament waifu
 ├ !dailymission - Misi harian
-├ !destiny - Pick your destiny
-├ !roleplay - Chat karakter
+├ !destiny - Pick destiny
 ├ !shiritori - Anime shiritori
 ├ !emojiriddles - Tebak emoji
 ├ !scramble - Tebak nama acak
@@ -80,36 +103,53 @@ async function handleMenu(msg) {
 ├ !hangman - Anime hangman
 └ !waifucompat - Cek kecocokan
 
-*✨ FITUR SPESIAL*
+*✨ FITUR EKONOMI*
+├ !rank - Cek level/poin
+├ !inventory - Koleksi item
+├ !daily - Hadiah harian
+├ !work - Kerja dapat poin
+├ !bank - Cek bank poin
+└ !shop - Toko item
+
+[ ⬅ *KEMBALI* ] Ketik *!menu 1*
+[ 🔘 *LAINNYA* ] ➡ Ketik *!menu 3*
+            `.trim();
+        } else if (page === '3') {
+            menu = `
+╔═══════════════════════╗
+║  🎌 *Anthropic MENU (3)* 🎌 ║
+╚═══════════════════════╝
+
+*💍 FITUR SOSIAL*
+├ !marry <target> - Menikah
+├ !divorce - Bercerai
+├ !marrylist - Daftar nikah
+├ !steal <target> - Curi poin
+├ !duel <target> - Duel poin
+├ !give <target> <jml> - Transfer
+└ !leaderboardglobal - Top global
+
+*🐾 PET SYSTEM*
+├ !pet - Status pet
+├ !feed - Beri makan pet
+├ !setpetname <nama> - Ganti nama
+└ !waifusafari - Berburu waifu 🏹
+
+*🛠️ UTILITY & AI*
+├ !afk <alasan> - Set AFK 💤
 ├ !profile - Cek profil
-├ !adventure - RPG Adventure
-└ !setprofile - Atur profil
+├ !detectanime - Cari judul via gambar 🔍
+├ !animenews - Berita anime 📰
+├ !tracker - Episode Tracker
+├ !heal - Pulihkan HP
+├ !upgrade <item> - Upgrade
+└ !wish - Gacha keberuntungan
 
-*🎭 FITUR TAMBAHAN*
-├ !otakudesu - Rekomendasi anime
-└ !ai <pertanyaan> - Chat dengan AI 🤖
+[ ⬅ *KEMBALI* ] Ketik *!menu 2*
+            `.trim();
+        }
 
-╔══════════════════════╗
-║  🎮 *CARA MAIN QUIZ* 🎮  ║
-╚══════════════════════╝
-
-1️⃣ Ketik !guessanime atau !waifuquiz
-2️⃣ Baca petunjuk yang diberikan
-3️⃣ Jawab dengan mengetik jawaban
-4️⃣ Dapatkan hint setelah 2x salah!
-5️⃣ Ketik !skipquiz untuk menyerah
-
-╔══════════════════════╗
-║  Dibuat dengan ❤️ oleh    ║
-║      ${config.botName}         ║
-╚══════════════════════╝
-
-_Quiz system dengan auto-detection jawaban!_
-        `.trim();
-        
         await msg.reply(menu);
-        console.log('✅ Menu sent successfully');
-        
     } catch (error) {
         console.error('❌ Error in handleMenu:', error);
         throw error;

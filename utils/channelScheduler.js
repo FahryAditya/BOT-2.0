@@ -48,6 +48,30 @@ const setupChannelScheduler = () => {
   }, {
     timezone: "Asia/Jakarta"
   });
+
+  // 06:00 WIB - Good Morning
+  cron.schedule('0 6 * * *', async () => {
+    console.log('⏰ 06:00 WIB - Running morning greeting...');
+    try {
+      await channelCommands.sendGoodMorning();
+    } catch (error) {
+      console.error('Scheduled morning greeting error:', error);
+    }
+  }, {
+    timezone: "Asia/Jakarta"
+  });
+
+  // 22:00 WIB - Good Night
+  cron.schedule('0 22 * * *', async () => {
+    console.log('⏰ 22:00 WIB - Running night greeting...');
+    try {
+      await channelCommands.sendGoodNight();
+    } catch (error) {
+      console.error('Scheduled night greeting error:', error);
+    }
+  }, {
+    timezone: "Asia/Jakarta"
+  });
   
   console.log('✅ Channel scheduler initialized!');
 };

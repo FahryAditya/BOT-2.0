@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  user_id    String    @id
+  points     BigInt?   @default(100)
+  bank       BigInt?   @default(0)
+  exp        BigInt?   @default(0)
+  level      Int?      @default(1)
+  hp         Int?      @default(100)
+  max_hp     Int?      @default(100)
+  last_daily BigInt?   @default(0)
+  last_work  BigInt?   @default(0)
+  last_heal  BigInt?   @default(0)
+  inventory  Json?     @default("[]")
+  pet        Json?     @default("{\"name\": \"None\", \"level\": 1, \"health\": 100, \"hunger\": 100, \"lastFed\": 0}")
+  marry      String?
+  bio        String?   @default("No bio set")
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @updatedAt @db.Timestamptz(6)
+  balance    BigInt?   @default(0)
+
+  @@index([balance(sort: Desc)], map: "idx_users_balance")
+  @@map("users")
+}
+
+model groups {
+  id   String @id
+  data Json
+}
+
+model kv_store {
+  key    String  @id
+  value  Json?
+  expiry BigInt?
+}

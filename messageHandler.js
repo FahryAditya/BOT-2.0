@@ -1,11 +1,18 @@
 const config = require('./config');
 const quizManager = require('./quizManager');
+const db = require('./utils/jsonDB');
+const security = require('./utils/security');
+const userStats = require('./utils/userStats');
 
 // Anti-duplication: Track processed message IDs
 const processedMessages = new Set();
-setInterval(() => processedMessages.clear(), 30 * 60 * 1000); // Clear every 30 mins
+setInterval(() => {
+  if (processedMessages.size > 500) {
+    processedMessages.clear();
+  }
+}, 5 * 60 * 1000); // Check every 5 mins, clear if too many
 
-// Import all command handlers
+// Import all command handlers once
 const basicCommands = require('./commands/basicCommands');
 const animeCommands = require('./commands/animeCommands');
 const absurdCommands = require('./commands/absurdCommands');
@@ -15,7 +22,112 @@ const gamesCommands = require('./commands/gamesCommands');
 const aiCommands = require('./commands/aiCommands');
 const newGames = require('./commands/newGames');
 const specialCommands = require('./commands/specialFeatures');
+const specialCommands2 = require('./commands/specialFeatures2');
 const channelCommands = require('./commands/channelCommands');
+const newFeatures = require('./utils/newFeatures');
+const mediaCommands = require('./commands/mediaCommands');
+
+// Combine all handlers once at module level
+const commandHandlers = {
+    ...basicCommands,
+    ...animeCommands,
+    ...absurdCommands,
+    ...waifuCommands,
+    ...genreCommands,
+    ...gamesCommands,
+    ...aiCommands,
+    ...newGames,
+    ...specialCommands,
+    ...specialCommands2,
+    ...channelCommands,
+    ...mediaCommands
+};
+
+// Aliases & Custom Mappings
+const aliases = {
+    // Media & Basic
+    'stiker': 'makeSticker',
+    'sticker': 'makeSticker',
+    'gif': 'makeGif',
+    'tagall': 'tagAll',
+    
+    // Anime Info
+    'animechar': 'animeChar',
+    'manga': 'manga',
+    'seasonnow': 'seasonNow',
+    'topanime': 'topAnime',
+    'topmanga': 'topManga',
+    
+    // Genre
+    'searchgenre': 'searchGenre',
+    'randomgenre': 'randomGenre',
+    'animegenre': 'animeGenre',
+    
+    // Games & Quiz
+    'tebakanime': 'guessAnime',
+    'guesstheanime': 'guessAnime',
+    'guessthecharacter': 'guessthecharacter',
+    'mangaquiz': 'mangaquiz',
+    'openingquiz': 'openingquiz',
+    'spainwaifu': 'spinwaifu',
+    'spinwaifu': 'spinwaifu',
+    'shiritori': 'shiritori',
+    'slot': 'slot',
+    'tebakangka': 'tebakangka',
+    'tebakgambar': 'tebakgambar',
+    'tebaktebakan': 'tebaktebakan',
+    'hitung': 'hitung',
+    'katabijak': 'katabijak',
+    'skipquiz': 'skipQuiz',
+    
+    // Absurd Features
+    'animefact': 'animeFact',
+    'animememe': 'animeMeme',
+    'animecharabsurd': 'animeWeirdChar',
+    'animeemoji': 'animeEmoji',
+    'animevs': 'animeVs',
+    'animeghost': 'animeGhost',
+    'animemood': 'animeRandomQuote',
+    'animefood': 'animeFood',
+    'animepet': 'animePet',
+    
+    // Waifu & Economy
+    'cariwaifu': 'cariWaifu',
+    'randomwaifu': 'randomWaifu',
+    'waifuquiz': 'waifuQuiz',
+    'otakudesu': 'otakudesu',
+    'waifusafari': 'waifuSafari',
+    'rank': 'rank',
+    'inventory': 'inventory',
+    'daily': 'daily',
+    'work': 'work',
+    'bank': 'bank',
+    'shop': 'shop',
+    
+    // Social & RPG
+    'marry': 'marry',
+    'divorce': 'divorce',
+    'marrylist': 'marrylist',
+    'steal': 'steal',
+    'duel': 'duel',
+    'give': 'give',
+    'git': 'git',
+    'leaderboardglobal': 'leaderboardglobal',
+    'heal': 'heal',
+    'upgrade': 'upgrade',
+    'wish': 'wish',
+    'setbio': 'setbio',
+    'setprofile': 'profile',
+    'adventure': 'rpg',
+    
+    // Admin & Utility
+    'upanim': 'updateAnimeChannel',
+    'detectanime': 'detectAnime',
+    'animenews': 'animeNews',
+    'tracker': 'tracker',
+    'neofact': 'neoFact',
+    'giftpoint': 'giftPointAll'
+};
 
 /**
  * Robust parsing for commands
@@ -31,17 +143,10 @@ const parseCommand = (messageBody) => {
   const regex = new RegExp(`^${prefix}(\\w+)(?:\\s+(.*))?$`, 'i');
   const match = trimmed.match(regex);
   
-  console.log(`[DEBUG] Parsing: "${trimmed}", Prefix: "${prefix}"`);
-  
-  if (!match) {
-    console.log(`[DEBUG] No command match found.`);
-    return null;
-  }
+  if (!match) return null;
   
   const commandName = match[1].toLowerCase();
   const params = match[2] ? match[2].trim() : '';
-  
-  console.log(`[DEBUG] Parsed: Command="${commandName}", Params="${params}"`);
   
   return {
     command: commandName,
@@ -62,11 +167,12 @@ const handleMessage = async (message) => {
     processedMessages.add(msgId);
 
     // Hanya proses pesan teks
-    if (message.type !== 'chat') {
-      if (!message.body) return;
+    if (message.type !== 'chat' && !message.body) {
+      return;
     }
 
     const chatId = message.from;
+    const user = message.author || message.from;
 
     // 1. Parse command
     const parsed = parseCommand(message.body);
@@ -74,200 +180,48 @@ const handleMessage = async (message) => {
     if (!parsed) {
       // Cek apakah ada active quiz
       if (quizManager.hasActiveSession(chatId)) {
-          console.log('🎮 Handling quiz answer...');
           return handleQuizAnswer(message, message.body.trim());
       }
       return;
     }
-    
+
     const { command, params } = parsed;
     const args = params ? params.split(/\s+/) : [];
-    
-    console.log(`🚀 Executing: ${command} with params: "${params}"`);
 
     // 2. Route to handlers
-    switch(command) {
-      // BASIC COMMANDS
-      case 'ping':
-        await basicCommands.ping(message);
-        break;
-      
-      case 'menu':
-        await basicCommands.menu(message);
-        break;
-      
-      case 'tagall':
-        await basicCommands.tagAll(message);
-        break;
-      
-      // ANIME COMMANDS
-      case 'manga':
-        await animeCommands.manga(message, args);
-        break;
-      
-      case 'animechar':
-        await animeCommands.animeChar(message, args);
-        break;
-      
-      case 'seasonnow':
-        await animeCommands.seasonNow(message);
-        break;
-      
-      case 'topanime':
-        await animeCommands.topAnime(message);
-        break;
-      
-      case 'topmanga':
-        await animeCommands.topManga(message);
-        break;
-      
-      // GENRE COMMANDS
-      case 'animegenre':
-        await genreCommands.animeGenre(message);
-        break;
-      
-      case 'searchgenre':
-        await genreCommands.searchGenre(message, args);
-        break;
-      
-      case 'randomgenre':
-        await genreCommands.randomGenre(message);
-        break;
-      
-      // ABSURD COMMANDS
-      case 'animememe':
-        await absurdCommands.animeMeme(message);
-        break;
-      case 'animefact':
-        await absurdCommands.animeFact(message);
-        break;
-      case 'animeweirdchar':
-        await absurdCommands.animeWeirdChar(message);
-        break;
-      case 'guessanime':
-        await absurdCommands.guessAnime(message);
-        break;
-      case 'animeemoji':
-        await absurdCommands.animeEmoji(message);
-        break;
-      case 'animevs':
-        await absurdCommands.animeVs(message);
-        break;
-      case 'animeghost':
-        await absurdCommands.animeGhost(message);
-        break;
-      case 'animerandomquote':
-        await absurdCommands.animeRandomQuote(message);
-        break;
-      case 'animefood':
-        await absurdCommands.animeFood(message);
-        break;
-      case 'animepet':
-        await absurdCommands.animePet(message);
-        break;
-      case 'skipquiz':
-        await absurdCommands.skipQuiz(message);
-        break;
+    const actualCommand = aliases[command] || command;
 
-      // ======= 18 GAMES =======
-      case 'guesstheanime':
-      case 'guessthecharacter':
-      case 'mangaquiz':
-      case 'openingquiz':
-      case 'animerate':
-      case 'spainwaifu': // SPIN WAIFU
-      case 'spinwaifu':
-      case 'animetrivia':
-      case 'waifutournament':
-      case 'dailymission':
-      case 'destiny':
-      case 'shiritori':
-      case 'emojiriddles':
-      case 'scramble':
-      case 'guessscene':
-      case 'hangman':
-      case 'waifucompat':
-        // Check if function exists in gamesCommands
-        if (typeof gamesCommands[command] === 'function') {
-            await gamesCommands[command](message, params);
-        } else if (typeof newGames[command] === 'function') {
-            await newGames[command](message, args);
-        } else {
-            // Fallback to handleGameCommand if it exists (legacy)
-            if (typeof gamesCommands.handleGameCommand === 'function') {
-                await gamesCommands.handleGameCommand(message, command, args);
-            } else {
-                message.reply(`❌ Game !${command} belum tersedia.`);
+    if (typeof commandHandlers[actualCommand] === 'function') {
+        const isGroup = chatId.endsWith('@g.us');
+        console.log(`🚀 [${new Date().toLocaleTimeString()}] ${isGroup ? 'GROUP' : 'CHAT'} ${chatId} calling: ${actualCommand}`);
+
+        // --- USER LIMIT CHECK (Optimized for Speed) ---
+        // Use the actual function names here
+        const fastCommands = ['handlePing', 'ping', 'nondivorce', 'activedivorce', 'updateCharacterChannel', 'updateAnimeChannel', 'neoFact', 'giftPointAll'];
+        if (!fastCommands.includes(actualCommand)) {
+            // Run typing indicator in background (non-blocking)
+            message.getChat().then(chat => chat.sendStateTyping()).catch(() => {});
+        }
+        
+        try {
+            await commandHandlers[actualCommand](message, args, params);
+        } catch (error) {
+            if (error.message.includes('Execution context was destroyed')) {
+                console.warn(`⚠️ [RETRY] Context destroyed for !${actualCommand}, user might have triggered navigation.`);
+                // Optional: silent retry once if appropriate, or just ignore to prevent crash
+                return; 
             }
+            console.error(`❌ Error executing command !${actualCommand}:`, error);
+            await message.reply('❌ Terjadi kesalahan saat menjalankan command.');
         }
-        break;
-      
-      case 'roleplay':
-        // Some games might be in specialCommands
-        if (typeof gamesCommands.roleplay === 'function') {
-            await gamesCommands.roleplay(message, params);
-        } else {
-            await specialCommands.moderation(message, args); // Legacy mapping
+    } else if (newFeatures[actualCommand]) {
+        try {
+            await newFeatures[actualCommand](message, args);
+        } catch (error) {
+            console.error(`❌ Error in newFeatures !${actualCommand}:`, error);
         }
-        break;
-
-      // WAIFU COMMANDS
-      case 'cariwaifu':
-        await waifuCommands.cariWaifu(message, params);
-        break;
-      
-      case 'randomwaifu':
-        await waifuCommands.randomWaifu(message);
-        break;
-      
-      case 'waifuquiz':
-        await waifuCommands.waifuQuiz(message);
-        break;
-      
-      case 'otakudesu':
-        await waifuCommands.otakudesu(message);
-        break;
-
-      // SPECIAL COMMANDS
-      case 'profile':
-        await specialCommands.profile(message, args);
-        break;
-      
-      case 'adventure':
-        await specialCommands.rpg(message);
-        break;
-      
-      case 'setprofile':
-        await specialCommands.profile(message, args);
-        break;
-      
-      case 'tracker':
-        await specialCommands.tracker(message, args);
-        break;
-      
-      case 'moderation':
-        await specialCommands.moderation(message, args);
-        break;
-
-      // ADDITIONAL
-      case 'ai':
-        await aiCommands.aiChat(message, params);
-        break;
-      
-      // CHANNEL COMMANDS (SECRET)
-      case 'upchar':
-        await channelCommands.updateCharacterChannel(message, params);
-        break;
-
-      case 'upanim':
-        await channelCommands.updateAnimeChannel(message, params);
-        break;
-
-      default:
-        // Optional: Reply for unknown command
-        // if (parsed) message.reply('❌ Command tidak ditemukan!');
-        break;
     }
+
   } catch (error) {
     console.error(`❌ Error in handleMessage (${message.body}):`, error);
     try {
@@ -286,19 +240,25 @@ const handleMessage = async (message) => {
 async function handleQuizAnswer(msg, answer) {
     try {
         const chatId = msg.from;
+        const user = msg.author || msg.from;
         const result = quizManager.checkAnswer(chatId, answer);
         
         if (!result) return;
         
         if (result.correct) {
             const emoji = result.attempts === 1 ? '🏆' : result.attempts === 2 ? '🎉' : '✅';
+            const pointsReward = result.attempts === 1 ? 100 : result.attempts === 2 ? 50 : 20;
+            
+            const stats = await userStats.addPoints(user, pointsReward);
             
             await msg.reply(
                 `${emoji} *BENAR!*\n\n` +
                 `Jawaban: *${result.answer}*\n` +
-                `Percobaan: ${result.attempts}x\n\n` +
+                `Percobaan: ${result.attempts}x\n` +
+                `Hadiah: +${pointsReward} points 💰\n\n` +
+                `Level: ${stats.level} (${stats.exp} EXP)\n` +
                 (result.partial ? '_(Jawaban kamu hampir benar!)_\n\n' : '') +
-                `Main lagi? Ketik !guessanime atau !waifuquiz!`
+                `Main lagi? Ketik !tebakangka atau !tebakgambar!`
             );
         } else {
             let response = `❌ *SALAH!*\n\nPercobaan ke-${result.attempts}\n\n`;

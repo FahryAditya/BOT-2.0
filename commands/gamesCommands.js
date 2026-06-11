@@ -58,23 +58,32 @@ Type !spainwaifu again untuk spin lagi!
   }
 };
 
-const guessTheAnime = async (msg) => {
-    await msg.reply('🎬 *Guess The Anime:* "Cerita tentang pemuda yang punya kekuatan supernatural..."\nA) Jujutsu Kaisen B) Bleach C) My Hero Academia');
-};
-
 const guessTheCharacter = async (msg) => {
-    await msg.reply('😱 *Guess The Character:* "Mata Sharingan, Tinggal di Konoha..."');
-};
-
-const animeVs = async (msg) => {
-    await msg.reply('⚔️ *Anime VS:* Siapa yang menang antara Goku vs Saitama?');
+    const questions = [
+        { q: "Mata Sharingan, Tinggal di Konoha, Punya kakak bernama Itachi...", a: "Sasuke" },
+        { q: "Punya topi jerami, suka makan daging, ingin jadi Raja Bajak Laut...", a: "Luffy" },
+        { q: "Rambut kuning, suka ramen, punya rubah di dalam perutnya...", a: "Naruto" }
+    ];
+    const item = questions[Math.floor(Math.random() * questions.length)];
+    const question = `😱 *Guess The Character*\n\n"${item.q}"`;
+    quizManager.createSession(msg.from, 'guessthecharacter', question, item.a, [`Huruf pertama: ${item.a[0]}`]);
+    await msg.reply(question);
 };
 
 const mangaQuiz = async (msg) => {
-    await msg.reply('📖 *Manga Quiz:* Siapa pengarang One Piece?\nA) Masashi Kishimoto B) Eiichiro Oda C) Tite Kubo');
+    const questions = [
+        { q: "Siapa pengarang One Piece?", a: "Eiichiro Oda" },
+        { q: "Siapa pengarang Naruto?", a: "Masashi Kishimoto" },
+        { q: "Siapa pengarang Dragon Ball?", a: "Akira Toriyama" }
+    ];
+    const item = questions[Math.floor(Math.random() * questions.length)];
+    const question = `📖 *Manga Quiz*\n\n${item.q}`;
+    quizManager.createSession(msg.from, 'mangaquiz', question, item.a, [`Inisial: ${item.a.split(' ').map(n => n[0]).join('')}`]);
+    await msg.reply(question);
 };
 
 const openingQuiz = async (msg) => {
+// ... existing openingQuiz logic ...
     try {
         await msg.reply('🔍 *Mencari data opening anime (2020+)...*');
         
@@ -146,41 +155,13 @@ const rolePlay = async (msg) => {
     await msg.reply('🎭 *Roleplay:* Kamu sekarang berada di dunia Isekai. Apa yang kamu lakukan?');
 };
 
-const shiritori = async (msg) => {
-    await msg.reply('🎮 *Shiritori:* Ayo main shiritori anime! Mulai dengan: Naruto');
-};
-
-const emojiRiddles = async (msg) => {
-    await msg.reply('🧩 *Emoji Riddle:* 👒🍖🌊\nTebak anime-nya!');
-};
-
-const scramble = async (msg) => {
-    await msg.reply('🔠 *Scramble:* OTUNAR\nSusun kata ini menjadi nama karakter!');
-};
-
-const guessScene = async (msg) => {
-    await msg.reply('📸 *Guess Scene:* Adegan ini berasal dari anime apa? (Gambar loading...)');
-};
-
-const hangman = async (msg) => {
-    await msg.reply('😵 *Hangman:* A _ _ _ _\nTebak judul anime-nya!');
-};
-
-const waifuCompat = async (msg, params) => {
-    if (!params) return msg.reply('❌ Format: !waifucompat <nama waifu>');
-    const compat = Math.floor(Math.random() * 100);
-    await msg.reply(`💕 *Waifu Compatibility:* Kecocokan kamu dengan ${params} adalah ${compat}%!`);
-};
-
 const leaderboard = async (msg) => {
     const lb = getLeaderboard();
     await msg.reply('🏆 *Leaderboard:*\n' + JSON.stringify(lb, null, 2));
 };
 
 module.exports = {
-  guesstheanime: guessTheAnime,
   guessthecharacter: guessTheCharacter,
-  animevs: animeVs,
   mangaquiz: mangaQuiz,
   openingquiz: openingQuiz,
   animerate: animateRate,

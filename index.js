@@ -6,18 +6,19 @@ const config = require('./config');
 const { handleMessage } = require('./messageHandler');
 const { handleWelcome } = require('./commands/welcomeCommand');
 const { setupChannelScheduler } = require('./utils/channelScheduler');
-const readline = require('readline');
+const { initializeDatabase } = require('./utils/neonDB');
 
 let isReady = false;
 let authenticatedAt = null;
-let pairingCodeRequested = false;
 
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+// Initialize Database
+initializeDatabase().then(success => {
+    if (success) {
+        console.log('✅ Database Neon terhubung!');
+    } else {
+        console.error('❌ Gagal menghubungkan database Neon. Cek DATABASE_URL!');
+    }
 });
-
-const question = (query) => new Promise((resolve) => rl.question(query, resolve));
 
 const fs = require('fs');
 
@@ -40,7 +41,60 @@ function getChromePath() {
     return null;
 }
 
+// Fungsi untuk membersihkan lock file browser
+function cleanupBrowserLock() {
+    const lockFiles = [
+        './session/session-anime-bot/SingletonLock',
+        './session/session-anime-bot/SingletonCookie',
+        './session/session-anime-bot/SingletonSocket'
+    ];
+
+    lockFiles.forEach(file => {
+        const fullPath = path.resolve(file);
+        if (fs.existsSync(fullPath)) {
+            try {
+                fs.unlinkSync(fullPath);
+                console.log(`🧹 Cleaned up lock file: ${file}`);
+            } catch (err) {
+                console.warn(`⚠️  Gagal menghapus lock file ${file}:`, err.message);
+            }
+        }
+    });
+}
+
 const chromePath = getChromePath();
+const http = require('http');
+const path = require('path');
+
+// Run cleanup before initialization
+cleanupBrowserLock();
+
+// Simple HTTP Server to keep the process alive
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is running!\n');
+});
+
+const PORT = process.env.PORT || 8080;
+
+server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+        console.warn(`⚠️  Port ${PORT} sudah digunakan. Mencoba port lain...`);
+        setTimeout(() => {
+            server.close();
+            server.listen(0, () => {
+                const newPort = server.address().port;
+                console.log(`📡 Keep-alive server fallback to port ${newPort}`);
+            });
+        }, 1000);
+    } else {
+        console.error('❌ Server error:', e.message);
+    }
+});
+
+server.listen(PORT, () => {
+    console.log(`📡 Keep-alive server listening on port ${PORT}`);
+});
 
 console.log('🚀 Memulai Anime WhatsApp Bot...');
 console.log('⚙️  Konfigurasi:');
@@ -49,105 +103,91 @@ console.log('   - Prefix:', config.prefix);
 console.log('   - Detected Chrome Path:', chromePath || 'Not found (using bundled)');
 console.log('');
 
+// Puppeteer args optimized for low-memory environments
+const puppeteerArgs = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--no-first-run',
+    '--no-zygote',
+    '--disable-gpu',
+    '--disable-extensions',
+    '--mute-audio',
+    '--disable-canvas-aa',
+    '--disable-2d-canvas-clip-aa',
+    '--disable-gl-drawing-for-tests',
+    '--safebrowsing-disable-auto-update',
+    '--ignore-certificate-errors',
+    '--disable-features=IsolateOrigins,site-per-process',
+    '--disable-ipc-flooding-protection',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-background-networking',
+    '--disable-breakpad',
+    '--disable-component-extensions-with-background-pages',
+    '--disable-domain-reliability',
+    '--disable-hang-monitor',
+    '--disable-infobars',
+    '--disable-notifications',
+    '--disable-popup-blocking',
+    '--disable-print-preview',
+    '--disable-speech-api',
+    '--disable-sync',
+    '--metrics-recording-only',
+    '--no-default-browser-check',
+    '--password-store=basic',
+    '--use-mock-keychain',
+    '--window-size=400,400', // Smaller window
+    '--blink-settings=imagesEnabled=false', // Disable images to save RAM
+    '--disable-remote-fonts'
+];
+
 // Inisialisasi client
 const client = new Client({
     authStrategy: new LocalAuth({
         dataPath: './session',
         clientId: 'anime-bot'
     }),
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+    },
+    takeoverOnConflict: true,
     puppeteer: {
         headless: true,
         executablePath: chromePath || undefined,
         handleSIGINT: false,
         handleSIGTERM: false,
         handleSIGHUP: false,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--disable-gpu',
-            '--disable-extensions'
-        ]
+        args: puppeteerArgs
     }
 });
 
 // Event: QR Code generation
 client.on('qr', async (qr) => {
-    // Jika tidak ada session dan belum request pairing code, tawarkan pilihan
-    if (!fs.existsSync('./session/session-anime-bot') && !pairingCodeRequested) {
-        console.log('\n');
-        console.log('╔════════════════════════════════════════╗');
-        console.log('║        📱 PILIH METODE LOGIN           ║');
-        console.log('╠════════════════════════════════════════╣');
-        console.log('║ 1. QR Code (Scan langsung)             ║');
-        console.log('║ 2. Pairing Code (Masukan Kode)         ║');
-        console.log('╚════════════════════════════════════════╝');
-        console.log('');
-        
-        const choice = await question('Pilihan kamu (1/2): ');
-        
-        if (choice === '2') {
-            console.log('\n💡 Menggunakan metode Pairing Code...');
-            let phoneNumber = await question('Masukkan nomor WhatsApp (contoh: 628123456789): ');
-            phoneNumber = phoneNumber.replace(/[^0-9]/g, '');
-            
-            if (phoneNumber) {
-                try {
-                    const code = await client.requestPairingCode(phoneNumber);
-                    console.log('\n');
-                    console.log('╔════════════════════════════════════════╗');
-                    console.log(`║    PAIRING CODE KAMU: ${code}    ║`);
-                    console.log('╚════════════════════════════════════════╝');
-                    console.log('');
-                    console.log('📋 CARA PAKAI:');
-                    console.log('   1. Buka WhatsApp di HP kamu');
-                    console.log('   2. Tap Menu (3 titik) atau Settings');
-                    console.log('   3. Pilih "Linked Devices"');
-                    console.log('   4. Tap "Link with phone number instead"');
-                    console.log('   5. Masukkan kode di atas');
-                    console.log('');
-                    pairingCodeRequested = true;
-                    return;
-                } catch (err) {
-                    console.error('❌ Gagal mendapatkan pairing code:', err.message);
-                    console.log('🔄 Fallback ke QR Code...');
-                }
-            } else {
-                console.log('⚠️ Nomor tidak valid. Menggunakan QR Code...');
-            }
-        }
-    }
-
-    // Default: Tampilkan QR Code
-    if (!pairingCodeRequested) {
-        console.log('\n');
-        console.log('╔════════════════════════════════════════╗');
-        console.log('║     📱 SCAN QR CODE INI SEKARANG!     ║');
-        console.log('╚════════════════════════════════════════╝');
-        console.log('');
-        
-        qrcode.generate(qr, { small: true });
-        
-        console.log('');
-        console.log('📋 CARA SCAN:');
-        console.log('   1. Buka WhatsApp di HP kamu');
-        console.log('   2. Tap Menu (3 titik) atau Settings');
-        console.log('   3. Pilih "Linked Devices"');
-        console.log('   4. Tap "Link a Device"');
-        console.log('   5. Scan QR code di atas');
-        console.log('');
-        console.log('⏰ QR Code akan expired dalam 60 detik!');
-        console.log('   Jika expired, bot akan generate QR baru.');
-        console.log('');
-    }
+    console.log('\n');
+    console.log('╔════════════════════════════════════════╗');
+    console.log('║     📱 SCAN QR CODE INI SEKARANG!     ║');
+    console.log('╚════════════════════════════════════════╝');
+    console.log('');
+    
+    qrcode.generate(qr, { small: true });
+    
+    console.log('');
+    console.log('📋 CARA SCAN:');
+    console.log('   1. Buka WhatsApp di HP kamu');
+    console.log('   2. Tap Menu (3 titik) atau Settings');
+    console.log('   3. Pilih "Linked Devices"');
+    console.log('   4. Tap "Link a Device"');
+    console.log('   5. Scan QR code di atas');
+    console.log('');
 });
 
 // Event: Authentication
 client.on('authenticated', () => {
     authenticatedAt = Date.now();
-    if (rl) rl.close();
     console.log('');
     console.log('╔════════════════════════════════════════╗');
     console.log('║      🔐 AUTENTIKASI BERHASIL! ✅       ║');
@@ -222,49 +262,36 @@ client.on('disconnected', (reason) => {
 
 async function processIncomingMessage(msg) {
     try {
-        if (!isReady) {
-            console.log('Pesan masuk diabaikan karena client belum ready.');
-            return;
-        }
+        if (!isReady) return;
 
         // Ignore status messages
         if (msg.isStatus) return;
         
         // Ignore jika dari bot sendiri
-        if (msg.fromMe) {
-            // Log jika dari bot sendiri tapi mengandung prefix, bantu user debugging
-            if (msg.body && msg.body.startsWith(config.prefix)) {
-                console.log(`ℹ️  Pesan "${msg.body}" diabaikan karena dikirim dari nomor bot itu sendiri.`);
-            }
-            return;
-        }
+        if (msg.fromMe) return;
 
         if (!msg.body || !msg.body.trim()) return;
         
-        const chat = await msg.getChat().catch(() => null);
-        const chatName = chat?.name || chat?.id?._serialized || msg.from;
-        const isGroup = Boolean(chat?.isGroup);
+        const chatId = msg.from;
+        const isGroup = chatId.endsWith('@g.us');
 
         // Log pesan masuk (simplified)
         const preview = msg.body.length > 50 ? msg.body.substring(0, 50) + '...' : msg.body;
-        console.log(`MSG [${new Date().toLocaleTimeString()}] ${isGroup ? 'GROUP' : 'CHAT'} ${chatName}: ${preview}`);
+        console.log(`MSG [${new Date().toLocaleTimeString()}] ${isGroup ? 'GROUP' : 'CHAT'} ${chatId}: ${preview}`);
         
         // Handle message
         await handleMessage(msg);
         
     } catch (error) {
         console.error('❌ Error handling message:', error.message);
-        try {
-            await msg.reply('❌ Terjadi error saat memproses pesan!');
-        } catch (replyError) {
-            console.error('❌ Error sending error message:', replyError.message);
-        }
     }
 }
 
 // Event: pesan masuk dari user/grup.
-// Gunakan "message_create" agar lebih konsisten menangkap pesan masuk.
-client.on('message_create', processIncomingMessage);
+client.on('message_create', (msg) => {
+    // Gunakan setImmediate agar tidak memblokir event loop WhatsApp
+    setImmediate(() => processIncomingMessage(msg));
+});
 
 // Event: Group join
 client.on('group_join', handleWelcome);
@@ -285,15 +312,17 @@ process.on('uncaughtException', (error) => {
 });
 
 // Graceful shutdown
-process.on('SIGINT', async () => {
+const shutdown = async (signal) => {
     console.log('');
     console.log('╔════════════════════════════════════════╗');
-    console.log('║       ⚠️  MENUTUP BOT...              ║');
+    console.log(`║       ⚠️  MENUTUP BOT (${signal})...     ║`);
     console.log('╚════════════════════════════════════════╝');
     console.log('');
     
     try {
-        await client.destroy();
+        if (client) {
+            await client.destroy();
+        }
         console.log('✅ Bot berhasil ditutup!');
         console.log('');
         process.exit(0);
@@ -301,7 +330,10 @@ process.on('SIGINT', async () => {
         console.error('❌ Error saat menutup bot:', error.message);
         process.exit(1);
     }
-});
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 // Initialize client
 console.log('🔄 Menginisialisasi WhatsApp client...');
@@ -312,30 +344,47 @@ client.initialize().catch(error => {
     console.error('❌ Error saat inisialisasi:');
     console.error('   ', error.message);
     console.error('');
-    process.exit(1);
+    // Don't exit immediately, try to let the watchdog handle it or restart
+    setTimeout(() => {
+        console.log('🔄 Mencoba inisialisasi ulang...');
+        client.initialize().catch(() => {});
+    }, 10000);
 });
 
-// Watchdog: Jika stuck di loading/auth tapi tidak pernah ready
+// Watchdog: Cek status client secara berkala (Optimized for Efficiency)
 setInterval(async () => {
-    if (authenticatedAt && !isReady && Date.now() - authenticatedAt > 60000) {
-        console.warn('⚠️  Bot stuck di inisialisasi lebih dari 60 detik. Mencoba restart...');
+    // 1. Jika stuck di loading/auth
+    if (authenticatedAt && !isReady && Date.now() - authenticatedAt > 90000) {
+        console.warn('⚠️  Bot stuck in initialization. Restarting...');
         authenticatedAt = Date.now();
         try {
             await client.destroy();
             await sleep(2000);
             await client.initialize();
+        } catch (e) {}
+    }
+
+    // 2. Cek koneksi hanya jika perlu
+    if (isReady) {
+        try {
+            // getState is relatively expensive, so we check infrequently
+            const state = await client.getState();
+            if (state !== 'CONNECTED') {
+                isReady = false;
+                client.initialize().catch(() => {});
+            }
         } catch (e) {
-            console.error('❌ Watchdog restart gagal:', e.message);
+            isReady = false;
         }
     }
-}, 30000);
+}, 300000); // Check every 5 minutes instead of 1
 
-// Health check log setiap 10 menit
-setInterval(() => {
+// Health check log every 30 minutes
+setInterval(async () => {
     if (isReady) {
-        console.log(`📡 [${new Date().toLocaleTimeString()}] Health Check: Bot is ONLINE`);
+        console.log(`📡 [${new Date().toLocaleTimeString()}] System: Standby (Ready)`);
     }
-}, 600000);
+}, 1800000);
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));

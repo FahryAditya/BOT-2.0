@@ -18,7 +18,7 @@ const aiChat = async (message, params) => {
     
     // Fetch dari Gemini API
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         contents: [
           {
@@ -49,10 +49,18 @@ ${aiResponse}
 ━━━━━━━━━━━━━━━━━━━
     `.trim();
 
-    // Check if edit is available, otherwise send new message
+    // Check if edit is available and safe to use
+    let editSuccessful = false;
     if (loadingMsg && typeof loadingMsg.edit === 'function') {
-        await loadingMsg.edit(finalResponse);
-    } else {
+        try {
+            await loadingMsg.edit(finalResponse);
+            editSuccessful = true;
+        } catch (e) {
+            console.warn('[DEBUG] Failed to edit loading message, sending new message instead.');
+        }
+    }
+    
+    if (!editSuccessful) {
         await message.reply(finalResponse);
     }
     

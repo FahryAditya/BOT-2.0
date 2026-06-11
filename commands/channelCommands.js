@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { isAdmin, verifySecretCode } = require('../helpers');
 const { downloadImage } = require('../helpers');
+const { pool } = require('../utils/neonDB');
 
 /**
  * ADMIN COMMAND - Update Karakter ke Channel
@@ -331,18 +332,85 @@ const topMangaUpdate = async () => {
     await sendToChannel(message);
     
     console.log('✅ Top manga update sent');
-  } catch (error) {
+    } catch (error) {
     console.error('topMangaUpdate error:', error);
-  }
-};
+    }
+    };
 
-module.exports = {
-  updateCharacterChannel,
-  updateAnimeChannel,
-  randomCharacterUpdate,
-  randomAnimeUpdate,
-  topMangaUpdate,
-  sendToChannel,
-  formatCharacterChannel,
-  formatAnimeChannel
-};
+    /**
+    * Good morning greeting (Scheduled - 06:00 WIB)
+    */
+    const sendGoodMorning = async () => {
+    try {
+        const message = "🌅 *ArtemisOtaku.ID:* Selamat Pagi Min! Semoga harimu menyenangkan dan penuh semangat! ✨🎌";
+        await sendToChannel(message);
+    } catch (error) {
+        console.error('sendGoodMorning error:', error);
+    }
+    };
+
+    /**
+    * Good night greeting (Scheduled - 22:00 WIB)
+    */
+    const sendGoodNight = async () => {
+    try {
+        const message = "🌃 *ArtemisOtaku.ID:* Selamat Malam Min! Istirahatlah yang cukup, sampai jumpa besok! 🌙💤";
+        await sendToChannel(message);
+    } catch (error) {
+        console.error('sendGoodNight error:', error);
+    }
+    };
+
+    /**
+     * SUPER ADMIN COMMAND - Gift Points to ALL users
+     * Usage: !giftpoint 1000
+     * 
+     * Hanya Owner "7145" yang bisa!
+     */
+    const giftPointAll = async (message, args) => {
+        const sender = message.author || message.from;
+        const authorizedNumber = '6281550177145';
+
+        // 1. Identification check
+        if (!sender.includes(authorizedNumber)) return;
+
+        // 2. Validate input
+        const amount = parseInt(args[0]);
+        if (isNaN(amount) || amount <= 0) {
+            return message.reply('❌ Format: !giftpoint <nominal>');
+        }
+
+        try {
+            // Send immediate feedback
+            await message.reply(`⏳ Memproses pembagian *${amount} points* ke seluruh warga...`);
+
+            // 3. Optimized mass update
+            const res = await pool.query(`
+                UPDATE users 
+                SET points = points + $1,
+                    updated_at = NOW()
+            `, [amount]);
+
+            const totalUsers = res.rowCount;
+
+            await message.reply(`✅ *DONE!* \n\nBerhasil membagikan *${amount} points* kepada *${totalUsers}* user! 💰✨`);
+            
+        } catch (error) {
+            console.error('giftPointAll error:', error);
+            message.reply('❌ Gagal memproses: ' + error.message);
+        }
+    };
+
+    module.exports = {
+        updateCharacterChannel,
+        updateAnimeChannel,
+        randomCharacterUpdate,
+        randomAnimeUpdate,
+        topMangaUpdate,
+        sendGoodMorning,
+        sendGoodNight,
+        sendToChannel,
+        formatCharacterChannel,
+        formatAnimeChannel,
+        giftPointAll
+    };
